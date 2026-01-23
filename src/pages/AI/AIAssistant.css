@@ -36,8 +36,9 @@
 
 .sidebar-content {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: scroll;
   padding: 8px;
+  min-height: 0; /* 确保flex子项可以正确滚动 */
 }
 
 .loading-sessions {
@@ -110,6 +111,8 @@
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  min-height: 0; /* 确保flex子项可以正确滚动 */
+  background: #ffffff;
 }
 
 .ai-header {
@@ -119,6 +122,7 @@
   padding: 20px 24px;
   border-bottom: 1px solid #e2e8f0;
   background: #ffffff;
+  flex-shrink: 0; /* 防止头部被压缩 */
 }
 
 .ai-header h2 {
@@ -140,13 +144,15 @@
 /* 聊天窗口 */
 .chat-window {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden; /* 使用 MessageList(react-window) 的滚动容器，避免双滚动条 */
   padding: 24px;
   background: #fafbff;
+  min-height: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
+
 
 .loading-history {
   display: flex;
@@ -156,6 +162,7 @@
   gap: 16px;
   padding: 40px;
   color: #718096;
+  height: 100%;
 }
 
 .empty-chat {
@@ -166,6 +173,7 @@
   gap: 16px;
   padding: 60px 20px;
   color: #a0aec0;
+  height: 100%;
 }
 
 .empty-chat p {
@@ -182,6 +190,7 @@
   padding: 12px 16px;
   border-radius: 12px;
   animation: fadeIn 0.3s ease;
+  margin-bottom: 16px; /* 为虚拟列表项添加间距 */
 }
 
 @keyframes fadeIn {
@@ -231,6 +240,9 @@
   align-items: center;
   gap: 12px;
   color: #718096;
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
 }
 
 /* 输入区域 */
@@ -238,6 +250,7 @@
   padding: 20px 24px;
   border-top: 1px solid #e2e8f0;
   background: #ffffff;
+  flex-shrink: 0; /* 防止输入框被压缩 */
 }
 
 .chat-input textarea {

@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     } catch (error) {
-      alert("Error checking login status: " + error);
+      console.error("Error checking login status:", error);
       setUser(null);
     } finally {
       setLoading(false);

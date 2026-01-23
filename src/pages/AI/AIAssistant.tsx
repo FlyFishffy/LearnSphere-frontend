@@ -5,7 +5,9 @@ import Header from "../../components/Header";
 import request from "../../api/request";
 import type { ApiResponse, MessageVO, ChatRequest } from "../../types/api";
 import { useAuth } from "../../hooks/useAuth";
+import MessageList from "./MessageList";
 import "./AIAssistant.css";
+import "./scrollbar.css";
 
 const createSessionId = () =>
   crypto.randomUUID?.() ??
@@ -178,7 +180,7 @@ export default function AIAssistant() {
               新对话
             </Button>
           </div>
-          <div className="sidebar-content">
+          <div className="sidebar-content sidebar-scrollbar custom-scrollbar">
             {loadingSessions ? (
               <div className="loading-sessions">
                 <Spin size="small" />
@@ -227,7 +229,7 @@ export default function AIAssistant() {
               )}
             </div>
 
-            <div className="chat-window">
+            <div className="chat-window custom-scrollbar">
               {loadingHistory ? (
                 <div className="loading-history">
                   <Spin size="large" />
@@ -239,25 +241,7 @@ export default function AIAssistant() {
                   <p>开始新的对话吧！</p>
                 </div>
               ) : (
-                messages.map((msg, index) => (
-                  <div
-                    key={index}
-                    className={`chat-bubble ${
-                      msg.type === "USER" ? "user" : "ai"
-                    }`}
-                  >
-                    <div className="chat-role">
-                      {msg.type === "USER" ? "我" : "AI"}
-                    </div>
-                    <div className="chat-text">{msg.text}</div>
-                  </div>
-                ))
-              )}
-              {loading && (
-                <div className="chat-bubble ai loading">
-                  <Spin size="small" />
-                  <span>AI 正在思考…</span>
-                </div>
+                <MessageList messages={messages} loading={loading} />
               )}
             </div>
 

@@ -33,6 +33,10 @@ export interface Course {
   id: number;
   title: string;
   description: string;
+  tags: string;
+  createTime: string;
+  updateTime: string;
+  content: string;
 }
 
 export interface MessageVO {
@@ -43,4 +47,5 @@ export interface MessageVO {
 export interface ChatRequest {
   question: string;
   sessionId: string;
+  courseId?: number;
 }

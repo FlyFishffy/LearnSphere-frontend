@@ -1,0 +1,163 @@
+.course-list-wrapper {
+  min-height: 100vh;
+  background: #f7f8fb;
+  display: flex;
+  flex-direction: column;
+}
+
+.course-list-container {
+  flex: 1;
+  padding: 20px 40px 40px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* 筛选卡片 */
+.filter-card {
+  margin-bottom: 30px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.filter-content {
+  display: flex;
+  gap: 40px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-label {
+  font-size: 14px;
+  color: #718096;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 课程网格 */
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+/* 课程卡片 */
+.course-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.course-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+}
+
+.course-card-header {
+  height: 6px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.course-card-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.course-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #2d3748;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.course-description {
+  margin: 0;
+  font-size: 14px;
+  color: #718096;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+}
+
+.course-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.course-tag {
+  background: #f7f8fb;
+  color: #667eea;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.course-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.course-time {
+  font-size: 12px;
+  color: #a0aec0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .course-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .course-list-container {
+    padding: 20px;
+  }
+
+  .course-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .filter-item {
+    width: 100%;
+  }
+}
