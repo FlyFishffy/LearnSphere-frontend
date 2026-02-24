@@ -7,16 +7,11 @@ export interface ApiResponse<T> {
 export interface LoginUserVO {
   id: number;
   userName: string;
-  roleType: number;
-}
-
-export interface LoginUserVO {
-  id: number;
-  userName: string;
-  roleTypeDescription: string;
+  roleType: string;
   createTime?: string;
   updateTime?: string;
 }
+
 
 export interface UserRegisterDTO {
   userAccount: string;
@@ -33,6 +28,48 @@ export interface Course {
   id: number;
   title: string;
   description: string;
+  coverUrl?: string;
+  category?: string;
+  tags?: string;
+  contentMd?: string;
+  uploadUserId?: number;
+  status?: number;
+  videoUrl?: string;
+  videoDuration?: number;
+
+  createTime?: string;
+  updateTime?: string;
+  isDeleted?: number;
+}
+
+export interface LearningRecord {
+  id: number;
+  userId: number;
+  courseId: number;
+  progressPercent?: number;
+  currentSecond?: number;
+  totalSeconds?: number;
+  totalStudySeconds?: number;
+  lastLearningTime?: string;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface LearningAnalysis {
+  totalStudySeconds?: number;
+  activeDaysLast30?: number;
+  learningCourseCount?: number;
+  topCategory?: string;
+  topTag?: string;
+}
+
+export interface LearningReport {
+  totalStudySeconds?: number;
+  learningCourseCount?: number;
+  favoriteCourseCount?: number;
+  topCategory?: string;
+  topTag?: string;
+  lastLearningTime?: string;
 }
 
 export interface MessageVO {
@@ -43,4 +80,6 @@ export interface MessageVO {
 export interface ChatRequest {
   question: string;
   sessionId: string;
+  courseId?: number;
 }
+

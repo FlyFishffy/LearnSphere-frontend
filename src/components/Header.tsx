@@ -17,9 +17,11 @@ export default function Header() {
   const userMenuItems: MenuProps["items"] = [
     {
       key: "profile",
-      label: <span>个人中心</span>,
+      label: <span>学习中心</span>,
       icon: <UserOutlined />,
+      onClick: () => navigate("/learning"),
     },
+
     {
       type: "divider",
     },
@@ -40,7 +42,9 @@ export default function Header() {
       <div className="header-right">
         <Link to="/">首页</Link>
         <Link to="/courses">课程</Link>
+        <Link to="/learning">学习中心</Link>
         <Link to="/ai">AI 助教</Link>
+
 
         {user ? (
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">

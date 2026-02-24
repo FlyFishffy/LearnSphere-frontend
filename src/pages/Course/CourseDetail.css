@@ -1,0 +1,136 @@
+.course-detail-page {
+  min-height: 100vh;
+  background: #f7f8fb;
+}
+
+.course-detail-container {
+  padding: 32px 40px 60px 40px;
+}
+
+.course-detail-card {
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+  background: #fff;
+}
+
+.course-detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.course-detail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+
+.course-detail-title {
+  font-size: 28px;
+  margin-bottom: 10px;
+  color: #1f2a44;
+}
+
+.course-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.course-detail-cover {
+  width: 220px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.course-detail-desc {
+  font-size: 14px;
+  color: #5f6b7a;
+  margin-bottom: 20px;
+}
+
+.course-detail-learning {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.learning-panel {
+  border: 1px solid #eef1f6;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fafcff;
+}
+
+.learning-panel-title {
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #1f2a44;
+}
+
+.learning-panel-meta {
+  font-size: 13px;
+  color: #5f6b7a;
+  margin: 8px 0 12px 0;
+}
+
+.learning-panel-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 8px;
+}
+
+.course-detail-content {
+  padding: 16px 0 8px 0;
+  line-height: 1.8;
+  color: #1f2a44;
+}
+
+
+.course-detail-content h1,
+.course-detail-content h2,
+.course-detail-content h3 {
+  margin-top: 20px;
+}
+
+.course-detail-content pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 16px;
+  border-radius: 10px;
+  overflow: auto;
+}
+
+.course-detail-loading,
+.course-detail-empty {
+  display: flex;
+  justify-content: center;
+  padding: 80px 0;
+}
+
+@media (max-width: 768px) {
+  .course-detail-container {
+    padding: 24px;
+  }
+
+  .course-detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .course-detail-cover {
+    width: 100%;
+    height: 200px;
+  }
+
+  .course-detail-learning {
+    grid-template-columns: 1fr;
+  }
+}
+
