@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "../../components/Header";
 import request from "../../api/request";
-import type { ApiResponse, Course, LearningRecord } from "../../types/api";
+import type { ApiResponse, Course, LearningRecord, MessageVO, ChatRequest } from "../../types/api";
 import {
   Card,
   Spin,
@@ -13,13 +13,22 @@ import {
   InputNumber,
   Space,
   message as antdMessage,
+  Input,
+  Tooltip,
 } from "antd";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useAuth } from "../../hooks/useAuth";
+import { RobotOutlined, CloseOutlined, SendOutlined, CopyOutlined } from "@ant-design/icons";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import type { Components } from "react-markdown";
 import "./CourseDetail.css";
 
-
+const createSessionId = (): string =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 export default function CourseDetail() {
   const { id } = useParams();
@@ -35,7 +44,15 @@ export default function CourseDetail() {
   const [studySecondsIncrement, setStudySecondsIncrement] = useState<number>(0);
   const [isFavorite, setIsFavorite] = useState<boolean>(false);
 
-
+  // AI 对话面板状态
+  const [aiPanelOpen, setAiPanelOpen] = useState<boolean>(false);
+  const [aiQuestion, setAiQuestion] = useState<string>("");
+  const [aiMessages, setAiMessages] = useState<MessageVO[]>([]);
+  const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const streamingBufferRef = useRef<string>("");
+  const chatWindowRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -74,6 +91,153 @@ export default function CourseDetail() {
       });
   }, [id, user]);
 
+  // 自动滚动到底部
+  useEffect(() => {
+    const el = chatWindowRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [aiMessages, streamingText]);
+
+  // 复制到剪贴板
+  const copyToClipboard = useCallback(async (text: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      antdMessage.success("已复制到剪贴板");
+    } catch {
+      antdMessage.error("复制失败");
+    }
+  }, []);
+
+  // Markdown 代码块组件
+  type CodeComponentProps = React.DetailedHTMLProps<
+    React.HTMLAttributes<HTMLElement>,
+    HTMLElement
+  > & { inline?: boolean; className?: string; children?: React.ReactNode };
+
+  const MarkdownComponents: Components = {
+    code: (props: CodeComponentProps) => {
+      const { inline, className, children } = props;
+      const value = String(children).replace(/\n$/, "");
+      const match = /language-(\w+)/.exec(className || "");
+      const language = match ? match[1] : "";
+      if (inline) {
+        return <code className={className}>{children}</code>;
+      }
+      return (
+        <div className="code-block-wrapper" role="group">
+          <div className="code-block-toolbar">
+            <span className="lang-label">{language || "text"}</span>
+            <Tooltip title="复制">
+              <Button
+                type="text"
+                icon={<CopyOutlined />}
+                onClick={() => copyToClipboard(value)}
+                size="small"
+              />
+            </Tooltip>
+          </div>
+          <SyntaxHighlighter
+            style={vscDarkPlus}
+            language={language}
+            PreTag="div"
+            customStyle={{ margin: 0, padding: "1rem", borderRadius: 8 }}
+          >
+            {value}
+          </SyntaxHighlighter>
+        </div>
+      );
+    },
+  };
+
+  // SSE 流式问答
+  const askAI = useCallback(async (): Promise<void> => {
+    const trimmed = aiQuestion.trim();
+    if (!trimmed) {
+      antdMessage.warning("请输入问题");
+      return;
+    }
+    if (!user) {
+      antdMessage.warning("请先登录");
+      navigate("/login");
+      return;
+    }
+
+    const sessionId = currentSessionId || createSessionId();
+    if (!currentSessionId) {
+      setCurrentSessionId(sessionId);
+    }
+
+    const userMessage: MessageVO = { type: "USER", text: trimmed };
+    setAiMessages((prev) => [...prev, userMessage]);
+    setAiQuestion("");
+    setAiLoading(true);
+    setStreamingText("");
+    streamingBufferRef.current = "";
+
+    try {
+      const chatRequest: ChatRequest = {
+        question: trimmed,
+        sessionId,
+        courseId: id ? Number(id) : undefined,
+      };
+
+      const response = await fetch("/api/ai/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(chatRequest),
+        credentials: "include",
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error("网络请求失败");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let aiText = "";
+      let buffer = "";
+      let done = false;
+
+      while (!done) {
+        const { value, done: streamDone } = await reader.read();
+        if (streamDone) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const rawEvent of events) {
+          const lines = rawEvent.split("\n");
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const data = line.slice("data:".length);
+            if (data === "[DONE]" || data === "[DONE]\r") {
+              done = true;
+              break;
+            }
+            const piece = data === "" ? "\n" : data;
+            aiText += piece;
+            streamingBufferRef.current = aiText;
+            setStreamingText(streamingBufferRef.current);
+          }
+          if (done) break;
+        }
+      }
+
+      setStreamingText(null);
+      if (aiText) {
+        setAiMessages((prev) => [...prev, { type: "AI", text: aiText }]);
+      }
+    } catch (error) {
+      antdMessage.error("获取回答失败，请稍后再试");
+      console.error("AI 问答失败：", error);
+      setStreamingText(null);
+      setAiMessages((prev) => (prev.length >= 1 ? prev.slice(0, -1) : prev));
+    } finally {
+      setAiLoading(false);
+    }
+  }, [aiQuestion, currentSessionId, id, user, navigate]);
 
   if (loading) {
     return (
@@ -154,7 +318,6 @@ export default function CourseDetail() {
   };
 
   return (
-
     <div className="course-detail-page">
       <Header />
       <div className="course-detail-container">
@@ -187,7 +350,6 @@ export default function CourseDetail() {
               )}
             </div>
           </div>
-
 
           {course.description && (
             <div className="course-detail-desc">{course.description}</div>
@@ -249,9 +411,136 @@ export default function CourseDetail() {
               {course.contentMd || "暂无课程内容"}
             </ReactMarkdown>
           </div>
-
         </Card>
       </div>
+
+      {/* AI 悬浮按钮 */}
+      <Tooltip title="AI 课程助手" placement="left">
+        <button
+          className={`ai-float-btn ${aiPanelOpen ? "active" : ""}`}
+          onClick={() => setAiPanelOpen((prev) => !prev)}
+          aria-label="打开 AI 课程助手"
+        >
+          <RobotOutlined />
+        </button>
+      </Tooltip>
+
+      {/* AI 对话面板（右侧抽屉） */}
+      <div className={`ai-chat-panel ${aiPanelOpen ? "open" : ""}`}>
+        {/* 面板头部 */}
+        <div className="ai-panel-header">
+          <div className="ai-panel-title">
+            <RobotOutlined />
+            <span>AI 课程助手</span>
+          </div>
+          <div className="ai-panel-subtitle">基于《{course.title}》课程内容回答</div>
+          <button
+            className="ai-panel-close"
+            onClick={() => setAiPanelOpen(false)}
+            aria-label="关闭"
+          >
+            <CloseOutlined />
+          </button>
+        </div>
+
+        {/* 消息列表 */}
+        <div className="ai-panel-messages" ref={chatWindowRef}>
+          {aiMessages.length === 0 && streamingText === null ? (
+            <div className="ai-panel-empty">
+              <RobotOutlined style={{ fontSize: 36, color: "#c0c4cc" }} />
+              <p>你好！我是 AI 课程助手</p>
+              <p className="ai-panel-empty-hint">可以向我提问关于本课程的任何问题</p>
+            </div>
+          ) : (
+            <>
+              {aiMessages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`ai-panel-bubble ${msg.type === "USER" ? "user" : "ai"}`}
+                >
+                  <div className="ai-panel-role">{msg.type === "USER" ? "我" : "AI"}</div>
+                  {msg.type === "AI" ? (
+                    <div className="ai-panel-text markdown-content">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={MarkdownComponents}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="ai-panel-text">{msg.text}</div>
+                  )}
+                </div>
+              ))}
+
+              {/* 流式气泡 */}
+              {streamingText !== null && (
+                <div className="ai-panel-bubble ai streaming">
+                  <div className="ai-panel-role">AI</div>
+                  <div className="ai-panel-text markdown-content">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={MarkdownComponents}
+                    >
+                      {streamingText}
+                    </ReactMarkdown>
+                    <div className="typing-indicator" aria-hidden>
+                      <span className="dot" />
+                      <span className="dot" />
+                      <span className="dot" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {aiLoading && streamingText === null && (
+                <div className="ai-panel-bubble ai">
+                  <Spin size="small" />
+                  <span style={{ marginLeft: 8, fontSize: 13, color: "#718096" }}>
+                    AI 正在思考…
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* 输入区域 */}
+        <div className="ai-panel-input">
+          <Input.TextArea
+            rows={3}
+            placeholder="输入问题，按 Enter 发送，Shift+Enter 换行"
+            value={aiQuestion}
+            onChange={(e) => setAiQuestion(e.target.value)}
+            onPressEnter={(e) => {
+              if (!e.shiftKey) {
+                e.preventDefault();
+                if (!aiLoading) void askAI();
+              }
+            }}
+            disabled={aiLoading}
+          />
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            onClick={() => void askAI()}
+            loading={aiLoading}
+            disabled={aiLoading || !aiQuestion.trim()}
+            className="ai-panel-send-btn"
+          >
+            发送
+          </Button>
+        </div>
+      </div>
+
+      {/* 遮罩层（移动端） */}
+      {aiPanelOpen && (
+        <div
+          className="ai-panel-overlay"
+          onClick={() => setAiPanelOpen(false)}
+        />
+      )}
     </div>
   );
 }
