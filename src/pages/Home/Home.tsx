@@ -1,7 +1,36 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../../components/Header";
+import request from "../../api/request";
+import type { ApiResponse, Course } from "../../types/api";
+import { Tag } from "antd";
 import "./Home.css";
 
 export default function Home() {
+  const navigate = useNavigate();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadRecommendations = async () => {
+      setLoading(true);
+      try {
+        const res = await request.get<ApiResponse<Course[]>>(
+          "/learning/home-recommend",
+          { params: { limit: 3 } }
+        );
+        setCourses(res.data.data || []);
+      } catch {
+        setCourses([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadRecommendations();
+  }, []);
+
+  const badgeLabels = ["热门", "推荐", "新课"];
+
   return (
     <div className="home-wrapper">
       <Header />
@@ -16,10 +45,6 @@ export default function Home() {
           <p className="hero-subtitle">
             探索丰富的在线课程，提升技能，实现职业梦想
           </p>
-          <div className="hero-buttons">
-            <button className="btn-primary">开始学习</button>
-            <button className="btn-secondary">浏览课程</button>
-          </div>
         </div>
         <div className="hero-decoration">
           <div className="floating-shape shape-1"></div>
@@ -36,51 +61,62 @@ export default function Home() {
               <span className="title-icon">✨</span>
               推荐课程
             </h2>
-            <p className="section-description">精选优质课程，助你快速成长</p>
+            <p className="section-description">根据你的学习偏好，精选优质课程</p>
           </div>
 
           <div className="recommend-courses">
-            <div className="course-card">
-              <div className="course-image">
-                <div className="course-badge">热门</div>
+            {loading ? (
+              <>
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="course-card course-card-loading">
+                    <div className="course-image">
+                      <div className="course-badge">加载中</div>
+                    </div>
+                    <div className="course-content">
+                      <h3 className="course-title">课程加载中...</h3>
+                      <p className="course-description">正在为您准备精彩内容</p>
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : courses.length === 0 ? (
+              <div className="no-courses-hint">
+                暂无推荐课程，快去浏览课程开始学习吧！
               </div>
-              <div className="course-content">
-                <h3 className="course-title">课程加载中...</h3>
-                <p className="course-description">正在为您准备精彩内容</p>
-                <div className="course-footer">
-                  <span className="course-stats">0 学员</span>
-                  <span className="course-rating">⭐⭐⭐⭐⭐</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="course-card">
-              <div className="course-image">
-                <div className="course-badge">推荐</div>
-              </div>
-              <div className="course-content">
-                <h3 className="course-title">课程加载中...</h3>
-                <p className="course-description">正在为您准备精彩内容</p>
-                <div className="course-footer">
-                  <span className="course-stats">0 学员</span>
-                  <span className="course-rating">⭐⭐⭐⭐⭐</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="course-card">
-              <div className="course-image">
-                <div className="course-badge">新课</div>
-              </div>
-              <div className="course-content">
-                <h3 className="course-title">课程加载中...</h3>
-                <p className="course-description">正在为您准备精彩内容</p>
-                <div className="course-footer">
-                  <span className="course-stats">0 学员</span>
-                  <span className="course-rating">⭐⭐⭐⭐⭐</span>
-                </div>
-              </div>
-            </div>
+            ) : (
+              courses.map((course, index) => {
+                const tags = course.tags
+                  ? course.tags.split(",").filter(Boolean)
+                  : [];
+                return (
+                  <div
+                    key={course.id}
+                    className="course-card"
+                    onClick={() => navigate(`/courses/${course.id}`)}
+                  >
+                    <div className="course-image">
+                      <div className="course-badge">
+                        {badgeLabels[index % badgeLabels.length]}
+                      </div>
+                    </div>
+                    <div className="course-content">
+                      <h3 className="course-title">{course.title}</h3>
+                      <p className="course-description">
+                        {course.description || "暂无简介"}
+                      </p>
+                      <div className="course-meta-tags">
+                        {course.category && (
+                          <Tag color="blue">{course.category}</Tag>
+                        )}
+                        {tags.slice(0, 3).map((tag) => (
+                          <Tag key={tag}>{tag.trim()}</Tag>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

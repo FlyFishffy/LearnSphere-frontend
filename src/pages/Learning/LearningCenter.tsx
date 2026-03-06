@@ -33,14 +33,12 @@ export default function LearningCenter() {
   const [recordLoading, setRecordLoading] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
-  const [recommendLoading, setRecommendLoading] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const [records, setRecords] = useState<LearningRecord[]>([]);
   const [favorites, setFavorites] = useState<Course[]>([]);
   const [analysis, setAnalysis] = useState<LearningAnalysis | null>(null);
   const [report, setReport] = useState<LearningReport | null>(null);
-  const [recommendations, setRecommendations] = useState<Course[]>([]);
 
   const loadRecords = useCallback(async () => {
     setRecordLoading(true);
@@ -90,29 +88,13 @@ export default function LearningCenter() {
     }
   }, []);
 
-  const loadRecommendations = useCallback(async () => {
-    setRecommendLoading(true);
-    try {
-      const res = await request.get<ApiResponse<Course[]>>(
-        "/learning/recommend",
-        {
-          params: { limit: 6 },
-        }
-      );
-      setRecommendations(res.data.data || []);
-    } finally {
-      setRecommendLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     if (!user) return;
     loadRecords();
     loadFavorites();
     loadAnalysis();
     loadReport();
-    loadRecommendations();
-  }, [user, loadAnalysis, loadFavorites, loadRecords, loadRecommendations, loadReport]);
+  }, [user, loadAnalysis, loadFavorites, loadRecords, loadReport]);
 
   const recordList = useMemo(() => {
     return records.map((record) => {
@@ -333,52 +315,6 @@ export default function LearningCenter() {
                         />
                       </Col>
                     </Row>
-                  )}
-                </Card>
-              ),
-            },
-            {
-              key: "recommend",
-              label: "推荐课程",
-              children: (
-                <Card className="learning-card" bordered={false}>
-                  {recommendLoading ? (
-                    <div className="learning-loading">
-                      <Spin size="large" />
-                    </div>
-                  ) : recommendations.length === 0 ? (
-                    <Empty description="暂无推荐课程" />
-                  ) : (
-                    <div className="learning-course-grid">
-                      {recommendations.map((course) => {
-                        const tags = course.tags
-                          ? course.tags.split(",").filter(Boolean)
-                          : [];
-                        return (
-                          <Card
-                            key={course.id}
-                            className="learning-course-card"
-                            cover={
-                              course.coverUrl ? (
-                                <img src={course.coverUrl} alt={course.title} />
-                              ) : null
-                            }
-                            onClick={() => navigate(`/courses/${course.id}`)}
-                          >
-                            <div className="course-title">{course.title}</div>
-                            <div className="course-desc">{course.description}</div>
-                            <div className="course-meta">
-                              {course.category && (
-                                <Tag color="blue">{course.category}</Tag>
-                              )}
-                              {tags.map((tag) => (
-                                <Tag key={tag}>{tag}</Tag>
-                              ))}
-                            </div>
-                          </Card>
-                        );
-                      })}
-                    </div>
                   )}
                 </Card>
               ),
