@@ -47,8 +47,8 @@ export interface LearningRecord {
   userId: number;
   courseId: number;
   progressPercent?: number;
-  currentSecond?: number;
-  totalSeconds?: number;
+  scrollPosition?: number;
+  contentLength?: number;
   totalStudySeconds?: number;
   lastLearningTime?: string;
   createTime?: string;
@@ -81,5 +81,23 @@ export interface ChatRequest {
   question: string;
   sessionId: string;
   courseId?: number;
+}
+
+export interface ChunkVO {
+  id: number;
+  courseId: number;
+  chunkIndex: number;
+  text: string;
+  heading?: string;
+  source?: string;
+  createTime?: string;
+}
+
+export interface KnowledgeIndexStatusVO {
+  courseId: number;
+  courseTitle?: string;
+  chunkCount: number;
+  lastIndexTime?: string;
+  indexed: boolean;
 }
 

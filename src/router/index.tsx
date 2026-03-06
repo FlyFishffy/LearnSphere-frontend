@@ -7,6 +7,7 @@ import CourseDetail from "../pages/Course/CourseDetail";
 import CourseForm from "../pages/Course/CourseForm";
 import AIAssistant from "../pages/AI/AIAssistant";
 import LearningCenter from "../pages/Learning/LearningCenter";
+import KnowledgeBase from "../pages/Knowledge/KnowledgeBase";
 
 
 const router = createBrowserRouter([
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
   { path: "/courses/new", element: <CourseForm /> },
   { path: "/courses/edit/:id", element: <CourseForm /> },
   { path: "/courses/:id", element: <CourseDetail /> },
+  { path: "/knowledge/:courseId", element: <KnowledgeBase /> },
   { path: "/ai", element: <AIAssistant /> },
   { path: "/learning", element: <LearningCenter /> },
 

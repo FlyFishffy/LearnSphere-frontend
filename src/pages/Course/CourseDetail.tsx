@@ -10,7 +10,6 @@ import {
   Empty,
   Button,
   Progress,
-  InputNumber,
   Space,
   message as antdMessage,
   Input,
@@ -19,11 +18,20 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useAuth } from "../../hooks/useAuth";
-import { RobotOutlined, CloseOutlined, SendOutlined, CopyOutlined } from "@ant-design/icons";
+import { RobotOutlined, CloseOutlined, SendOutlined, CopyOutlined, DatabaseOutlined } from "@ant-design/icons";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Components } from "react-markdown";
 import "./CourseDetail.css";
+
+/** Format seconds into human-readable duration string */
+const formatStudyTime = (seconds: number): string => {
+  if (seconds < 60) return `${seconds}秒`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}分${seconds % 60}秒`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return `${h}小时${m}分`;
+};
 
 const createSessionId = (): string =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -41,8 +49,13 @@ export default function CourseDetail() {
   const [recordSaving, setRecordSaving] = useState<boolean>(false);
   const [record, setRecord] = useState<LearningRecord | null>(null);
   const [progressPercent, setProgressPercent] = useState<number>(0);
-  const [studySecondsIncrement, setStudySecondsIncrement] = useState<number>(0);
   const [isFavorite, setIsFavorite] = useState<boolean>(false);
+
+  // Document reading progress tracking
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const sessionStartRef = useRef<number>(Date.now());
+  const maxScrollPercentRef = useRef<number>(0);
+  const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // AI 对话面板状态
   const [aiPanelOpen, setAiPanelOpen] = useState<boolean>(false);
@@ -81,6 +94,7 @@ export default function CourseDetail() {
         );
         setRecord(targetRecord || null);
         setProgressPercent(targetRecord?.progressPercent ?? 0);
+        maxScrollPercentRef.current = targetRecord?.progressPercent ?? 0;
 
         const favoriteList = favoriteRes.data.data || [];
         setIsFavorite(favoriteList.some((item) => item.id === courseId));
@@ -90,6 +104,77 @@ export default function CourseDetail() {
         setFavoriteLoading(false);
       });
   }, [id, user]);
+
+  // Calculate content length from Markdown text
+  const contentLength = course?.contentMd?.length || 0;
+
+  // Save reading progress to backend
+  const saveReadingProgress = useCallback(async () => {
+    if (!user || !course) return;
+    const currentPercent = maxScrollPercentRef.current;
+    const scrollPosition = Math.round((currentPercent / 100) * contentLength);
+    const elapsed = Math.round((Date.now() - sessionStartRef.current) / 1000);
+    sessionStartRef.current = Date.now();
+    if (elapsed <= 0 && scrollPosition <= 0) return;
+    try {
+      await request.post("/learning/record/update", {
+        courseId: course.id,
+        scrollPosition,
+        contentLength,
+        studySecondsIncrement: elapsed > 0 ? elapsed : undefined,
+      });
+      setRecord((prev) => ({
+        id: prev?.id || 0,
+        userId: prev?.userId || 0,
+        courseId: course.id,
+        progressPercent: currentPercent,
+        scrollPosition,
+        contentLength,
+        totalStudySeconds: (prev?.totalStudySeconds || 0) + elapsed,
+        lastLearningTime: new Date().toISOString(),
+      }));
+    } catch {
+      // Silently fail for auto-save
+    }
+  }, [user, course, contentLength]);
+
+  // Track scroll position to compute reading progress
+  useEffect(() => {
+    const contentEl = contentRef.current;
+    if (!contentEl || !course?.contentMd) return;
+
+    const handleScroll = () => {
+      const rect = contentEl.getBoundingClientRect();
+      const contentHeight = contentEl.scrollHeight;
+      const viewportHeight = window.innerHeight;
+      // How much of the content has been scrolled past the viewport top
+      const scrolledPast = Math.max(0, -rect.top + viewportHeight);
+      const percent = Math.min(100, Math.round((scrolledPast / contentHeight) * 100));
+      if (percent > maxScrollPercentRef.current) {
+        maxScrollPercentRef.current = percent;
+        setProgressPercent(percent);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    // Run once on mount to capture initial position
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [course]);
+
+  // Auto-save reading progress every 30 seconds
+  useEffect(() => {
+    if (!user || !course) return;
+    sessionStartRef.current = Date.now();
+    saveTimerRef.current = setInterval(() => {
+      void saveReadingProgress();
+    }, 30000);
+    return () => {
+      if (saveTimerRef.current) clearInterval(saveTimerRef.current);
+      // Save on unmount (page leave)
+      void saveReadingProgress();
+    };
+  }, [user, course, saveReadingProgress]);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -295,23 +380,8 @@ export default function CourseDetail() {
     if (!course) return;
     setRecordSaving(true);
     try {
-      await request.post("/learning/record/update", {
-        courseId: course.id,
-        progressPercent,
-        studySecondsIncrement:
-          studySecondsIncrement > 0 ? studySecondsIncrement : undefined,
-      });
-      antdMessage.success("学习记录已更新");
-      setRecord((prev) => ({
-        id: prev?.id || 0,
-        userId: prev?.userId || 0,
-        courseId: course.id,
-        progressPercent,
-        totalStudySeconds:
-          (prev?.totalStudySeconds || 0) + (studySecondsIncrement || 0),
-        lastLearningTime: new Date().toISOString(),
-      }));
-      setStudySecondsIncrement(0);
+      await saveReadingProgress();
+      antdMessage.success("学习进度已保存");
     } finally {
       setRecordSaving(false);
     }
@@ -334,12 +404,20 @@ export default function CourseDetail() {
             </div>
             <div className="course-detail-actions">
               {user && ["Teacher", "Admin"].includes(user.roleType) && (
-                <Button
-                  type="primary"
-                  onClick={() => navigate(`/courses/edit/${course.id}`)}
-                >
-                  编辑课程
-                </Button>
+                <Space>
+                  <Button
+                    type="primary"
+                    onClick={() => navigate(`/courses/edit/${course.id}`)}
+                  >
+                    编辑课程
+                  </Button>
+                  <Button
+                    icon={<DatabaseOutlined />}
+                    onClick={() => navigate(`/knowledge/${course.id}`)}
+                  >
+                    知识库管理
+                  </Button>
+                </Space>
               )}
               {course.coverUrl && (
                 <img
@@ -357,56 +435,35 @@ export default function CourseDetail() {
 
           <div className="course-detail-learning">
             <div className="learning-panel">
-              <div className="learning-panel-title">学习进度</div>
-              <Progress percent={progressPercent} />
+              <div className="learning-panel-title">阅读进度</div>
+              <Progress percent={progressPercent} status={progressPercent >= 100 ? "success" : "active"} />
               <div className="learning-panel-meta">
-                最近学习：{record?.lastLearningTime || "-"}
+                {progressPercent >= 100 ? "🎉 已阅读完毕" : "继续向下滚动阅读，进度将自动更新"}
+              </div>
+              <div className="learning-panel-meta">
+                累计学习时长：{record?.totalStudySeconds ? formatStudyTime(record.totalStudySeconds) : "0秒"}　|　最近学习：{record?.lastLearningTime || "-"}
               </div>
               <Space wrap>
-                <InputNumber
-                  min={0}
-                  max={100}
-                  value={progressPercent}
-                  onChange={(value) =>
-                    setProgressPercent(typeof value === "number" ? value : 0)
-                  }
-                  placeholder="进度(%)"
-                />
-                <InputNumber
-                  min={0}
-                  value={studySecondsIncrement}
-                  onChange={(value) =>
-                    setStudySecondsIncrement(typeof value === "number" ? value : 0)
-                  }
-                  placeholder="本次学习时长(秒)"
-                />
                 <Button
                   type="primary"
                   loading={recordSaving}
                   onClick={handleSaveRecord}
                 >
-                  保存学习记录
+                  保存阅读进度
+                </Button>
+                <Button
+                  type={isFavorite ? "default" : "primary"}
+                  loading={favoriteLoading}
+                  onClick={handleToggleFavorite}
+                >
+                  {isFavorite ? "取消收藏" : "收藏课程"}
                 </Button>
               </Space>
               {recordLoading && <div className="learning-panel-hint">加载中...</div>}
             </div>
-
-            <div className="learning-panel">
-              <div className="learning-panel-title">课程收藏</div>
-              <div className="learning-panel-meta">
-                累计学习时长：{record?.totalStudySeconds || 0} 秒
-              </div>
-              <Button
-                type={isFavorite ? "default" : "primary"}
-                loading={favoriteLoading}
-                onClick={handleToggleFavorite}
-              >
-                {isFavorite ? "取消收藏" : "收藏课程"}
-              </Button>
-            </div>
           </div>
 
-          <div className="course-detail-content">
+          <div className="course-detail-content" ref={contentRef}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {course.contentMd || "暂无课程内容"}
             </ReactMarkdown>
