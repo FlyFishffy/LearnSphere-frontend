@@ -7,18 +7,44 @@ import {
   message as antdMessage,
   Tooltip,
   Select,
+  Modal,
+  Rate,
+  Tag,
+  Collapse,
 } from "antd";
 
-import { PlusOutlined, MessageOutlined, CopyOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  MessageOutlined,
+  CopyOutlined,
+  EditOutlined,
+  StarOutlined,
+  FileTextOutlined,
+  LikeOutlined,
+  LikeFilled,
+  DislikeOutlined,
+  DislikeFilled,
+} from "@ant-design/icons";
 import Header from "../../components/Header";
 import request from "../../api/request";
-import type { ApiResponse, MessageVO, ChatRequest, Course } from "../../types/api";
+import type {
+  ApiResponse,
+  MessageVO,
+  ChatRequest,
+  Course,
+  RetrievalChunkVO,
+  LlmFeedbackRequest,
+  ChatEvaluationRequest,
+} from "../../types/api";
 
 import { useAuth } from "../../hooks/useAuth";
 import "./AIAssistant.css";
+import "katex/dist/katex.min.css";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
@@ -70,14 +96,35 @@ export default function AIAssistant(): React.JSX.Element {
     {}
   );
 
-  // 当前流式中的文本（单独一个“打字气泡”，不进 messages）
+  // 当前流式中的文本（单独一个"打字气泡"，不进 messages）
   const [streamingText, setStreamingText] = useState<string | null>(null);
+
+  // Current streaming sources (received before answer tokens)
+  const [streamingSources, setStreamingSources] = useState<RetrievalChunkVO[]>([]);
+
+  // Teacher feedback modal state
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [feedbackTarget, setFeedbackTarget] = useState<{
+    question: string;
+    answer: string;
+  } | null>(null);
+  const [feedbackRating, setFeedbackRating] = useState<number>(0);
+  const [feedbackComment, setFeedbackComment] = useState<string>("");
+  const [feedbackCorrectedAnswer, setFeedbackCorrectedAnswer] = useState<string>("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
   // 滚动容器 ref
   const chatWindowRef = useRef<HTMLDivElement | null>(null);
 
   // 用于临时合并流式文本，减少频繁 setState
   const streamingBufferRef = useRef<string>("");
+
+  // User evaluation state: message index -> thumbs value (1=up, -1=down)
+  const [evaluations, setEvaluations] = useState<Record<number, number>>({});
+  // User star rating state: message index -> rating (1-5)
+  const [ratings, setRatings] = useState<Record<number, number>>({});
+  // Track which messages are currently submitting evaluation
+  const [evaluatingIdx, setEvaluatingIdx] = useState<Set<number>>(new Set());
 
   /* ---- 加载课程列表 ---- */
 
@@ -101,7 +148,25 @@ export default function AIAssistant(): React.JSX.Element {
     try {
       const res = await request.get<ApiResponse<string[]>>("/ai/get/session");
       if (res.data.code === 200) {
-        setSessions(res.data.data || []);
+        const sessionList = res.data.data || [];
+        setSessions(sessionList);
+
+        // Batch fetch all session titles
+        if (sessionList.length > 0) {
+          try {
+            const titlesRes = await request.get<
+              ApiResponse<Record<string, string>>
+            >("/ai/get/session/titles");
+            if (titlesRes.data.code === 200 && titlesRes.data.data) {
+              setSessionTitles((prev) => ({
+                ...prev,
+                ...titlesRes.data.data,
+              }));
+            }
+          } catch (err) {
+            console.warn("Failed to load session titles:", err);
+          }
+        }
       }
     } catch (error) {
       console.error("加载会话列表失败：", error);
@@ -177,6 +242,164 @@ export default function AIAssistant(): React.JSX.Element {
     }
   }, []);
 
+  /* ---- Teacher Feedback ---- */
+
+  const userRole = user?.roleType?.toLowerCase?.() || "";
+  const isTeacher = userRole === "teacher" || userRole === "admin";
+
+  // Debug: log user role info (can remove after verification)
+  useEffect(() => {
+    if (user) {
+      console.log("[AIAssistant] user:", user, "roleType:", user.roleType, "isTeacher:", userRole === "teacher" || userRole === "admin");
+    }
+  }, [user, userRole]);
+
+  const openFeedbackModal = useCallback(
+    (question: string, answer: string) => {
+      setFeedbackTarget({ question, answer });
+      setFeedbackRating(0);
+      setFeedbackComment("");
+      setFeedbackCorrectedAnswer("");
+      setFeedbackModalOpen(true);
+    },
+    []
+  );
+
+  const submitFeedback = useCallback(async (): Promise<void> => {
+    if (!feedbackTarget) return;
+    if (feedbackRating === 0 && !feedbackCorrectedAnswer.trim() && !feedbackComment.trim()) {
+      antdMessage.warning("请至少提供评分、修正答案或评论中的一项");
+      return;
+    }
+    setFeedbackSubmitting(true);
+    try {
+      const reqBody: LlmFeedbackRequest = {
+        courseId: selectedCourseId,
+        sessionId: currentSessionId || undefined,
+        question: feedbackTarget.question,
+        originalAnswer: feedbackTarget.answer,
+        correctedAnswer: feedbackCorrectedAnswer.trim() || undefined,
+        rating: feedbackRating || undefined,
+        comment: feedbackComment.trim() || undefined,
+      };
+      const res = await request.post<ApiResponse<unknown>>("/feedback/submit", reqBody);
+      if (res.data.code === 200) {
+        antdMessage.success("反馈提交成功");
+        setFeedbackModalOpen(false);
+      } else {
+        antdMessage.error(res.data.message || "提交失败");
+      }
+    } catch (error) {
+      antdMessage.error("提交反馈失败");
+      console.error(error);
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  }, [feedbackTarget, feedbackRating, feedbackCorrectedAnswer, feedbackComment, selectedCourseId, currentSessionId]);
+
+  /* ---- User Evaluation (thumbs up/down + star rating) ---- */
+
+  const submitEvaluation = useCallback(
+    async (msgIndex: number, thumbs: 1 | -1): Promise<void> => {
+      if (!currentSessionId) return;
+      const aiMsg = messages[msgIndex];
+      if (!aiMsg || aiMsg.type !== "AI") return;
+
+      // Find preceding user message
+      const prevUserMsg = messages
+        .slice(0, msgIndex)
+        .reverse()
+        .find((m) => m.type === "USER");
+
+      // If already the same thumbs, toggle off (remove evaluation)
+      const currentThumbs = evaluations[msgIndex];
+      if (currentThumbs === thumbs) {
+        setEvaluations((prev) => {
+          const next = { ...prev };
+          delete next[msgIndex];
+          return next;
+        });
+        return;
+      }
+
+      setEvaluatingIdx((prev) => new Set(prev).add(msgIndex));
+      try {
+        const reqBody: ChatEvaluationRequest = {
+          sessionId: currentSessionId,
+          courseId: selectedCourseId,
+          question: prevUserMsg?.text || "",
+          aiAnswer: aiMsg.text,
+          thumbs,
+        };
+        const res = await request.post<ApiResponse<unknown>>(
+          "/evaluation/submit",
+          reqBody
+        );
+        if (res.data.code === 200) {
+          setEvaluations((prev) => ({ ...prev, [msgIndex]: thumbs }));
+          antdMessage.success(thumbs === 1 ? "已点赞 👍" : "已点踩 👎");
+        } else {
+          antdMessage.error(res.data.message || "评价提交失败");
+        }
+      } catch (error) {
+        antdMessage.error("评价提交失败");
+        console.error(error);
+      } finally {
+        setEvaluatingIdx((prev) => {
+          const next = new Set(prev);
+          next.delete(msgIndex);
+          return next;
+        });
+      }
+    },
+    [currentSessionId, messages, selectedCourseId, evaluations]
+  );
+
+  /** Submit star rating for an AI message */
+  const submitRating = useCallback(
+    async (msgIndex: number, ratingValue: number): Promise<void> => {
+      if (!currentSessionId) return;
+      const aiMsg = messages[msgIndex];
+      if (!aiMsg || aiMsg.type !== "AI") return;
+
+      const prevUserMsg = messages
+        .slice(0, msgIndex)
+        .reverse()
+        .find((m) => m.type === "USER");
+
+      setEvaluatingIdx((prev) => new Set(prev).add(msgIndex));
+      try {
+        const reqBody: ChatEvaluationRequest = {
+          sessionId: currentSessionId,
+          courseId: selectedCourseId,
+          question: prevUserMsg?.text || "",
+          aiAnswer: aiMsg.text,
+          rating: ratingValue,
+        };
+        const res = await request.post<ApiResponse<unknown>>(
+          "/evaluation/submit",
+          reqBody
+        );
+        if (res.data.code === 200) {
+          setRatings((prev) => ({ ...prev, [msgIndex]: ratingValue }));
+          antdMessage.success(`已评分 ${ratingValue} 星 ⭐`);
+        } else {
+          antdMessage.error(res.data.message || "评分提交失败");
+        }
+      } catch (error) {
+        antdMessage.error("评分提交失败");
+        console.error(error);
+      } finally {
+        setEvaluatingIdx((prev) => {
+          const next = new Set(prev);
+          next.delete(msgIndex);
+          return next;
+        });
+      }
+    },
+    [currentSessionId, messages, selectedCourseId]
+  );
+
   /* ---- ReactMarkdown 组件的类型化（无 any） ---- */
 
   // 使用 react-markdown 的 Components 类型来为自定义组件建立类型
@@ -234,9 +457,57 @@ export default function AIAssistant(): React.JSX.Element {
     },
 
     table: (props: TableComponentProps) => {
-      // props.children 的类型由 react-markdown 提供
       return <table className="markdown-table">{props.children}</table>;
     },
+  };
+
+  /* ---- Source Citation Component ---- */
+
+  const SourceCitation: React.FC<{ sources: RetrievalChunkVO[] }> = ({ sources }) => {
+    if (!sources || sources.length === 0) return null;
+    return (
+      <Collapse
+        className="source-citation-collapse"
+        size="small"
+        items={[
+          {
+            key: "sources",
+            label: (
+              <span className="source-citation-label">
+                <FileTextOutlined /> 参考来源 ({sources.length})
+              </span>
+            ),
+            children: (
+              <div className="source-citation-list">
+                {sources.map((src, idx) => (
+                  <div key={idx} className="source-citation-item">
+                    <div className="source-citation-header">
+                      <Tag color="blue">[来源{idx + 1}]</Tag>
+                      {src.heading && (
+                        <span className="source-heading">{src.heading}</span>
+                      )}
+                      {src.source && (
+                        <Tag color="geekblue">{src.source}</Tag>
+                      )}
+                      {src.score != null && (
+                        <Tag color={src.score > 0.7 ? "green" : src.score > 0.4 ? "orange" : "red"}>
+                          相关性: {(src.score * 100).toFixed(1)}%
+                        </Tag>
+                      )}
+                    </div>
+                    <div className="source-citation-text">
+                      {src.text.length > 200
+                        ? src.text.substring(0, 200) + "..."
+                        : src.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ),
+          },
+        ]}
+      />
+    );
   };
 
   /* ---- SSE 流式请求（稳健解析） ---- */
@@ -266,6 +537,7 @@ export default function AIAssistant(): React.JSX.Element {
     setQuestion("");
     setLoading(true);
     setStreamingText(""); // 开始显示流式气泡
+    setStreamingSources([]); // reset sources
     streamingBufferRef.current = "";
 
     try {
@@ -295,48 +567,68 @@ export default function AIAssistant(): React.JSX.Element {
       let aiText = "";
       let buffer = "";
       let done = false;
+      let parsedSources: RetrievalChunkVO[] = [];
 
-      // 解析 SSE：保持原始 data 内容（不 trim），当 data 为 "" 时解释为换行
+      // Parse SSE: handle "sources" event and normal data events
       while (!done) {
         const { value, done: streamDone } = await reader.read();
         if (streamDone) break;
 
         buffer += decoder.decode(value, { stream: true });
 
-        // SSE 事件通常以 \n\n 分隔
+        // SSE events separated by \n\n
         const events = buffer.split("\n\n");
         buffer = events.pop() || "";
 
         for (const rawEvent of events) {
           const lines = rawEvent.split("\n");
+          let eventName = "";
+          let eventData = "";
+
           for (const line of lines) {
-            if (!line.startsWith("data:")) {
-              continue;
+            if (line.startsWith("event:")) {
+              eventName = line.slice("event:".length).trim();
+            } else if (line.startsWith("data:")) {
+              eventData = line.slice("data:".length);
             }
-            // 保留 data 后的原始内容（包含空格）
-            const data = line.slice("data:".length);
+          }
 
-            // 终止符
-            if (data === "[DONE]" || data === "[DONE]\r") {
-              done = true;
-              break;
+          // Handle sources event
+          if (eventName === "sources" && eventData) {
+            try {
+              parsedSources = JSON.parse(eventData) as RetrievalChunkVO[];
+              setStreamingSources(parsedSources);
+            } catch (e) {
+              console.warn("Failed to parse sources SSE:", e);
             }
+            continue;
+          }
 
-            // 空 data 表示显式换行
-            const piece = data === "" ? "\n" : data;
+          // Handle done event
+          if (eventName === "done" || eventData === "[DONE]" || eventData === "[DONE]\r") {
+            done = true;
+            break;
+          }
 
-            // 拼接（不做 trim）
+          // Handle error event
+          if (eventName === "error") {
+            console.error("SSE error:", eventData);
+            done = true;
+            break;
+          }
+
+          // Normal data: streaming text tokens
+          if (eventData !== undefined && eventName === "") {
+            const piece = eventData === "" ? "\n" : eventData;
             aiText += piece;
-
-            // 更新流式 buffer 并触发渲染（合并后一次 set）
             streamingBufferRef.current = aiText;
             setStreamingText(streamingBufferRef.current);
           }
-          if (done) break;
         }
+        if (done) break;
       }
 
-      // 流结束：清除流式气泡并写入完整 AI 消息
+      // Stream ended: clear streaming bubble and write full AI message
       setStreamingText(null);
 
       if (aiText) {
@@ -345,9 +637,11 @@ export default function AIAssistant(): React.JSX.Element {
           {
             type: "AI",
             text: aiText,
+            sources: parsedSources.length > 0 ? parsedSources : undefined,
           },
         ]);
       }
+      setStreamingSources([]);
 
       // 如果是新会话，刷新会话列表
       if (!sessions.includes(sessionId)) {
@@ -492,29 +786,113 @@ export default function AIAssistant(): React.JSX.Element {
                     >
                       <div className="chat-role">
                         {msg.type === "USER" ? "我" : "AI"}
+                        {msg.type === "AI" && isTeacher && (
+                          <Tooltip title="修正/反馈">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<EditOutlined />}
+                              className="feedback-btn"
+                              onClick={() => {
+                                // Find the preceding user message as the question
+                                const prevUserMsg = messages
+                                  .slice(0, index)
+                                  .reverse()
+                                  .find((m) => m.type === "USER");
+                                openFeedbackModal(
+                                  prevUserMsg?.text || "",
+                                  msg.text
+                                );
+                              }}
+                            />
+                          </Tooltip>
+                        )}
                       </div>
                       {msg.type === "AI" ? (
-                        <div className="chat-text markdown-content">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={MarkdownComponents}
-                          >
-                            {msg.text}
-                          </ReactMarkdown>
-                        </div>
+                        <>
+                          <div className="chat-text markdown-content">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm, remarkMath]}
+                              rehypePlugins={[rehypeKatex]}
+                              components={MarkdownComponents}
+                            >
+                              {msg.text}
+                            </ReactMarkdown>
+                          </div>
+                          {msg.sources && msg.sources.length > 0 && (
+                            <SourceCitation sources={msg.sources} />
+                          )}
+                          {/* User evaluation: thumbs up/down + star rating */}
+                          <div className="eval-actions">
+                            <Tooltip title="有帮助">
+                              <Button
+                                type="text"
+                                size="small"
+                                className={`eval-btn thumbs-up ${
+                                  evaluations[index] === 1 ? "active" : ""
+                                }`}
+                                icon={
+                                  evaluations[index] === 1 ? (
+                                    <LikeFilled />
+                                  ) : (
+                                    <LikeOutlined />
+                                  )
+                                }
+                                disabled={evaluatingIdx.has(index)}
+                                onClick={() =>
+                                  void submitEvaluation(index, 1)
+                                }
+                              />
+                            </Tooltip>
+                            <Tooltip title="没帮助">
+                              <Button
+                                type="text"
+                                size="small"
+                                className={`eval-btn thumbs-down ${
+                                  evaluations[index] === -1 ? "active" : ""
+                                }`}
+                                icon={
+                                  evaluations[index] === -1 ? (
+                                    <DislikeFilled />
+                                  ) : (
+                                    <DislikeOutlined />
+                                  )
+                                }
+                                disabled={evaluatingIdx.has(index)}
+                                onClick={() =>
+                                  void submitEvaluation(index, -1)
+                                }
+                              />
+                            </Tooltip>
+                            <span className="eval-divider" />
+                            <Tooltip title="为回答质量评分">
+                              <span className="eval-rating-inline">
+                                <Rate
+                                  value={ratings[index] || 0}
+                                  onChange={(val) =>
+                                    void submitRating(index, val)
+                                  }
+                                  disabled={evaluatingIdx.has(index)}
+                                  style={{ fontSize: 14 }}
+                                />
+                              </span>
+                            </Tooltip>
+                          </div>
+                        </>
                       ) : (
                         <div className="chat-text">{msg.text}</div>
                       )}
                     </div>
                   ))}
 
-                  {/* 流式临时气泡（实时 Markdown 渲染） */}
+                  {/* 流式临时气泡（实时 Markdown 渲染 + 公式支持） */}
                   {streamingText !== null && (
                     <div className="chat-bubble ai streaming">
                       <div className="chat-role">AI</div>
                       <div className="chat-text markdown-content streaming-markdown">
                         <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
                           components={MarkdownComponents}
                         >
                           {streamingText}
@@ -526,6 +904,9 @@ export default function AIAssistant(): React.JSX.Element {
                           <span className="dot" />
                         </div>
                       </div>
+                      {streamingSources.length > 0 && (
+                        <SourceCitation sources={streamingSources} />
+                      )}
                     </div>
                   )}
 
@@ -569,6 +950,68 @@ export default function AIAssistant(): React.JSX.Element {
           </Card>
         </div>
       </div>
+
+      {/* Teacher Feedback Modal */}
+      <Modal
+        title="教师反馈 / 修正"
+        open={feedbackModalOpen}
+        onCancel={() => setFeedbackModalOpen(false)}
+        onOk={() => void submitFeedback()}
+        confirmLoading={feedbackSubmitting}
+        okText="提交反馈"
+        cancelText="取消"
+        width={700}
+        className="feedback-modal"
+      >
+        {feedbackTarget && (
+          <div className="feedback-form">
+            <div className="feedback-section">
+              <label>原始问题：</label>
+              <div className="feedback-original-text">{feedbackTarget.question}</div>
+            </div>
+            <div className="feedback-section">
+              <label>AI 原始回答：</label>
+              <div className="feedback-original-text ai-answer-preview">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                  components={MarkdownComponents}
+                >
+                  {feedbackTarget.answer.length > 500
+                    ? feedbackTarget.answer.substring(0, 500) + "..."
+                    : feedbackTarget.answer}
+                </ReactMarkdown>
+              </div>
+            </div>
+            <div className="feedback-section">
+              <label>评分：</label>
+              <Rate
+                value={feedbackRating}
+                onChange={setFeedbackRating}
+                character={<StarOutlined />}
+              />
+            </div>
+            <div className="feedback-section">
+              <label>修正后的回答（可选）：</label>
+              <Input.TextArea
+                rows={4}
+                placeholder="如果 AI 回答有误，请输入正确的回答..."
+                value={feedbackCorrectedAnswer}
+                onChange={(e) => setFeedbackCorrectedAnswer(e.target.value)}
+              />
+            </div>
+            <div className="feedback-section">
+              <label>评论 / 反馈说明（可选）：</label>
+              <Input.TextArea
+                rows={2}
+                placeholder="请输入您的评论或改进建议..."
+                value={feedbackComment}
+                onChange={(e) => setFeedbackComment(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* 底部版权信息 */}
       <div className="ai-footer">

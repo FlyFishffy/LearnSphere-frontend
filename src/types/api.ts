@@ -46,6 +46,7 @@ export interface LearningRecord {
   id: number;
   userId: number;
   courseId: number;
+  courseTitle?: string;
   progressPercent?: number;
   scrollPosition?: number;
   contentLength?: number;
@@ -75,12 +76,47 @@ export interface LearningReport {
 export interface MessageVO {
   type: "AI" | "USER";
   text: string;
+  /** Source chunks attached to AI response (only for AI messages) */
+  sources?: RetrievalChunkVO[];
+}
+
+export interface RetrievalChunkVO {
+  text: string;
+  heading?: string;
+  source?: string;
+  score?: number;
+  chunkIndex?: number;
 }
 
 export interface ChatRequest {
   question: string;
   sessionId: string;
   courseId?: number;
+}
+
+export interface LlmFeedback {
+  id?: number;
+  teacherId?: number;
+  courseId?: number;
+  sessionId?: string;
+  question: string;
+  originalAnswer: string;
+  correctedAnswer?: string;
+  rating?: number;
+  comment?: string;
+  status?: number;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface LlmFeedbackRequest {
+  courseId?: number;
+  sessionId?: string;
+  question: string;
+  originalAnswer: string;
+  correctedAnswer?: string;
+  rating?: number;
+  comment?: string;
 }
 
 export interface ChunkVO {
@@ -99,5 +135,67 @@ export interface KnowledgeIndexStatusVO {
   chunkCount: number;
   lastIndexTime?: string;
   indexed: boolean;
+}
+
+/* ---- Chat Evaluation (Feature #9) ---- */
+
+export interface ChatEvaluation {
+  id?: number;
+  userId?: number;
+  sessionId?: string;
+  courseId?: number;
+  question: string;
+  aiAnswer: string;
+  thumbs?: number; // 1=up, -1=down, 0=none
+  rating?: number; // 1-5
+  comment?: string;
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface ChatEvaluationRequest {
+  sessionId: string;
+  courseId?: number;
+  question: string;
+  aiAnswer: string;
+  thumbs?: number;
+  rating?: number;
+  comment?: string;
+}
+
+export interface ChatEvaluationStats {
+  totalCount?: number;
+  thumbsUpCount?: number;
+  thumbsDownCount?: number;
+  averageRating?: number;
+  satisfactionRate?: number;
+  ratedCount?: number;
+}
+
+/* ---- Recommendation Performance (Feature #10) ---- */
+
+export interface RecommendClickRequest {
+  courseId: number;
+  source: string; // "home" | "learning_center"
+  recommendCount?: number;
+  position?: number;
+}
+
+export interface RecommendStats {
+  totalImpressions?: number;
+  totalClicks?: number;
+  clickThroughRate?: number;
+  uniqueUsers?: number;
+  clickedUsers?: number;
+  userClickRate?: number;
+  topClickedCourseId?: number;
+  topClickedCourseTitle?: string;
+  topClickedCount?: number;
+}
+
+export interface RecommendCourseClick {
+  courseId: number;
+  courseTitle?: string;
+  clickCount: number;
 }
 

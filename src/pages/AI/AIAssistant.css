@@ -1,18 +1,14 @@
 /* AIAssistant.css - 完整增强版（带完美独立滚动条） */
 
-html,
-body {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden; /* 彻底锁死页面滚动 */
-}
+/* Note: Do NOT set global html/body overflow:hidden here,
+   it would kill scrolling on every other page. */
 
 .ai-wrapper {
   height: 100vh;
   background: #f7f8fb;
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* Only lock scrolling inside the AI chat page */
 }
 
 .ai-container {
@@ -75,6 +71,17 @@ body {
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   overflow: hidden; /* 关键：卡片本身不滚动 */
+  min-height: 0;
+}
+
+/* Ant Design Card generates a .ant-card-body wrapper that breaks the flex chain.
+   Force it to participate in the flex layout so .chat-window can scroll properly. */
+.ai-card .ant-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
   min-height: 0;
 }
 
@@ -215,6 +222,8 @@ body {
 }
 
 .chat-role {
+  display: flex;
+  align-items: center;
   font-size: 12px;
   font-weight: 600;
   opacity: 0.8;
@@ -444,4 +453,187 @@ body {
   .chat-input {
     padding: 16px;
   }
+}
+
+/* ==================== Source Citation Styles ==================== */
+
+.source-citation-collapse {
+  margin-top: 8px;
+  border: none;
+  background: transparent;
+}
+
+.source-citation-collapse .ant-collapse-header {
+  padding: 4px 8px !important;
+  font-size: 13px;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 6px !important;
+}
+
+.source-citation-collapse .ant-collapse-content-box {
+  padding: 8px !important;
+}
+
+.source-citation-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.source-citation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source-citation-item {
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border-left: 3px solid #667eea;
+}
+
+.source-citation-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.source-heading {
+  font-size: 12px;
+  color: #4a5568;
+  font-weight: 500;
+}
+
+.source-citation-text {
+  font-size: 13px;
+  color: #718096;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ==================== Teacher Feedback Styles ==================== */
+
+.feedback-btn {
+  margin-left: 8px;
+  color: #a0aec0 !important;
+  font-size: 12px;
+  vertical-align: middle;
+  opacity: 1 !important;
+}
+
+.feedback-btn:hover {
+  color: #667eea !important;
+}
+
+.feedback-modal .feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.feedback-section label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #2d3748;
+  font-size: 14px;
+}
+
+.feedback-original-text {
+  background: #f7f8fb;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #4a5568;
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-answer-preview .markdown-content {
+  font-size: 13px;
+}
+
+/* ==================== KaTeX Math Styles ==================== */
+
+.markdown-content .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 0;
+}
+
+.markdown-content .katex {
+  font-size: 1.1em;
+}
+
+/* Inline math should not break layout */
+.markdown-content .katex-inline {
+  white-space: nowrap;
+}
+
+/* ==================== User Evaluation (Thumbs Up/Down) Styles ==================== */
+
+.eval-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.eval-btn {
+  color: #a0aec0 !important;
+  font-size: 14px !important;
+  transition: all 0.2s ease;
+}
+
+.eval-btn:hover {
+  color: #667eea !important;
+  transform: scale(1.15);
+}
+
+.eval-btn.thumbs-up.active {
+  color: #48bb78 !important;
+}
+
+.eval-btn.thumbs-up.active:hover {
+  color: #38a169 !important;
+}
+
+.eval-btn.thumbs-down.active {
+  color: #f56565 !important;
+}
+
+.eval-btn.thumbs-down.active:hover {
+  color: #e53e3e !important;
+}
+
+.eval-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+  margin: 0 6px;
+}
+
+.eval-rating-inline {
+  display: inline-flex;
+  align-items: center;
+}
+
+.eval-rating-inline .ant-rate {
+  font-size: 14px !important;
+  line-height: 1;
+}
+
+.eval-rating-inline .ant-rate-star {
+  margin-inline-end: 2px !important;
 }

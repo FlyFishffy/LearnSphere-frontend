@@ -24,13 +24,11 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Components } from "react-markdown";
 import "./CourseDetail.css";
 
-/** Format seconds into human-readable duration string */
+/** Format seconds into human-readable duration string (in hours) */
 const formatStudyTime = (seconds: number): string => {
-  if (seconds < 60) return `${seconds}秒`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}分${seconds % 60}秒`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return `${h}小时${m}分`;
+  const hours = seconds / 3600;
+  if (hours < 0.01) return "0小时";
+  return `${hours.toFixed(2)}小时`;
 };
 
 const createSessionId = (): string =>
@@ -46,7 +44,6 @@ export default function CourseDetail() {
   const [loading, setLoading] = useState<boolean>(false);
   const [recordLoading, setRecordLoading] = useState<boolean>(false);
   const [favoriteLoading, setFavoriteLoading] = useState<boolean>(false);
-  const [recordSaving, setRecordSaving] = useState<boolean>(false);
   const [record, setRecord] = useState<LearningRecord | null>(null);
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [isFavorite, setIsFavorite] = useState<boolean>(false);
@@ -162,16 +159,33 @@ export default function CourseDetail() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [course]);
 
-  // Auto-save reading progress every 30 seconds
+  // Auto-save reading progress every 30 seconds + on page leave
   useEffect(() => {
     if (!user || !course) return;
     sessionStartRef.current = Date.now();
     saveTimerRef.current = setInterval(() => {
       void saveReadingProgress();
     }, 30000);
+
+    // Save when user closes / refreshes the page
+    const handleBeforeUnload = () => {
+      void saveReadingProgress();
+    };
+    // Save when user switches to another tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        void saveReadingProgress();
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       if (saveTimerRef.current) clearInterval(saveTimerRef.current);
-      // Save on unmount (page leave)
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      // Save on unmount (route navigation)
       void saveReadingProgress();
     };
   }, [user, course, saveReadingProgress]);
@@ -371,21 +385,7 @@ export default function CourseDetail() {
     }
   };
 
-  const handleSaveRecord = async () => {
-    if (!user) {
-      antdMessage.warning("请先登录");
-      navigate("/login");
-      return;
-    }
-    if (!course) return;
-    setRecordSaving(true);
-    try {
-      await saveReadingProgress();
-      antdMessage.success("学习进度已保存");
-    } finally {
-      setRecordSaving(false);
-    }
-  };
+
 
   return (
     <div className="course-detail-page">
@@ -441,16 +441,9 @@ export default function CourseDetail() {
                 {progressPercent >= 100 ? "🎉 已阅读完毕" : "继续向下滚动阅读，进度将自动更新"}
               </div>
               <div className="learning-panel-meta">
-                累计学习时长：{record?.totalStudySeconds ? formatStudyTime(record.totalStudySeconds) : "0秒"}　|　最近学习：{record?.lastLearningTime || "-"}
+                累计学习时长：{record?.totalStudySeconds ? formatStudyTime(record.totalStudySeconds) : "0小时"}　|　最近学习：{record?.lastLearningTime || "-"}
               </div>
               <Space wrap>
-                <Button
-                  type="primary"
-                  loading={recordSaving}
-                  onClick={handleSaveRecord}
-                >
-                  保存阅读进度
-                </Button>
                 <Button
                   type={isFavorite ? "default" : "primary"}
                   loading={favoriteLoading}

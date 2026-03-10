@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../../components/Header";
 import request from "../../api/request";
-import type { ApiResponse, Course } from "../../types/api";
+import type { ApiResponse, Course, RecommendClickRequest } from "../../types/api";
 import { Tag } from "antd";
 import "./Home.css";
 
@@ -30,6 +30,21 @@ export default function Home() {
   }, []);
 
   const badgeLabels = ["热门", "推荐", "新课"];
+
+  /** Log recommendation click for performance tracking */
+  const logRecommendClick = async (courseId: number, position: number) => {
+    try {
+      const body: RecommendClickRequest = {
+        courseId,
+        source: "home",
+        recommendCount: courses.length,
+        position,
+      };
+      await request.post("/recommend/click", body);
+    } catch {
+      // silently fail — click tracking should not affect UX
+    }
+  };
 
   return (
     <div className="home-wrapper">
@@ -92,7 +107,10 @@ export default function Home() {
                   <div
                     key={course.id}
                     className="course-card"
-                    onClick={() => navigate(`/courses/${course.id}`)}
+                    onClick={() => {
+                      void logRecommendClick(course.id, index);
+                      navigate(`/courses/${course.id}`);
+                    }}
                   >
                     <div className="course-image">
                       <div className="course-badge">
