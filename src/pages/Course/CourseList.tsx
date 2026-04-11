@@ -10,17 +10,25 @@ import "./CourseList.css";
 
 
 const categoryOptions = [
-  { label: "AI", value: 1 },
-  { label: "后端", value: 2 },
-  { label: "前端", value: 3 },
-  { label: "计算机网络", value: 4 },
+  { label: "计算机科学", value: 1 },
+  { label: "人工智能", value: 2 },
+  { label: "网络安全", value: 3 },
+  { label: "软件工程", value: 4 },
+  { label: "电子工程", value: 5 },
+  { label: "数学基础", value: 6 },
 ];
 
 const tagOptions = [
-  { label: "AI", value: 1 },
-  { label: "Java", value: 2 },
-  { label: "C++", value: 3 },
-  { label: "Golang", value: 4 },
+  { label: "数据结构与算法", value: 1 },
+  { label: "操作系统", value: 2 },
+  { label: "计算机网络", value: 3 },
+  { label: "编译原理", value: 4 },
+  { label: "数据库系统", value: 5 },
+  { label: "机器学习", value: 6 },
+  { label: "信息安全", value: 7 },
+  { label: "计算机体系结构", value: 8 },
+  { label: "程序设计", value: 9 },
+  { label: "信号处理", value: 10 },
 ];
 
 export default function CourseList() {

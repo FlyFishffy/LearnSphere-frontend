@@ -346,3 +346,91 @@
     font-size: 24px;
   }
 }
+
+/* 课程方向区域 */
+.directions-section {
+  margin-top: 80px;
+}
+
+.direction-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 40px;
+}
+
+.direction-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 32px 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  text-align: center;
+  animation: fadeInUp 0.6s ease-out;
+  animation-fill-mode: both;
+}
+
+.direction-card:nth-child(1) { animation-delay: 0.05s; }
+.direction-card:nth-child(2) { animation-delay: 0.1s; }
+.direction-card:nth-child(3) { animation-delay: 0.15s; }
+.direction-card:nth-child(4) { animation-delay: 0.2s; }
+.direction-card:nth-child(5) { animation-delay: 0.25s; }
+.direction-card:nth-child(6) { animation-delay: 0.3s; }
+
+.direction-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.direction-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  font-size: 28px;
+}
+
+.direction-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 8px;
+}
+
+.direction-desc {
+  font-size: 13px;
+  color: #718096;
+  line-height: 1.6;
+  margin: 0;
+}
+
+@media (max-width: 1024px) {
+  .direction-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .directions-section {
+    margin-top: 60px;
+  }
+
+  .direction-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .direction-card {
+    padding: 24px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .direction-title {
+    font-size: 16px;
+  }
+}
