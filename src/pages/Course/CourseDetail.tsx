@@ -14,11 +14,12 @@ import {
   message as antdMessage,
   Input,
   Tooltip,
+  Segmented,
 } from "antd";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useAuth } from "../../hooks/useAuth";
-import { RobotOutlined, CloseOutlined, SendOutlined, CopyOutlined, DatabaseOutlined } from "@ant-design/icons";
+import { RobotOutlined, CloseOutlined, SendOutlined, CopyOutlined, DatabaseOutlined, PlayCircleOutlined, ReadOutlined } from "@ant-design/icons";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { Components } from "react-markdown";
@@ -54,6 +55,11 @@ export default function CourseDetail() {
   const maxScrollPercentRef = useRef<number>(0);
   const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Content display mode: "video" or "document"
+  const [contentMode, setContentMode] = useState<string>("video");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // AI 对话面板状态
   const [aiPanelOpen, setAiPanelOpen] = useState<boolean>(false);
   const [aiQuestion, setAiQuestion] = useState<string>("");
@@ -70,7 +76,14 @@ export default function CourseDetail() {
     request
       .get<ApiResponse<Course>>(`/course/get/${id}`)
       .then((res) => {
-        setCourse(res.data.data || null);
+        const c = res.data.data || null;
+        setCourse(c);
+        // Default to video mode if video exists, otherwise document
+        if (c?.videoUrl) {
+          setContentMode("video");
+        } else {
+          setContentMode("document");
+        }
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -435,10 +448,16 @@ export default function CourseDetail() {
 
           <div className="course-detail-learning">
             <div className="learning-panel">
-              <div className="learning-panel-title">阅读进度</div>
+              <div className="learning-panel-title">
+                {contentMode === "video" ? "观看进度" : "阅读进度"}
+              </div>
               <Progress percent={progressPercent} status={progressPercent >= 100 ? "success" : "active"} />
               <div className="learning-panel-meta">
-                {progressPercent >= 100 ? "🎉 已阅读完毕" : "继续向下滚动阅读，进度将自动更新"}
+                {progressPercent >= 100
+                  ? "🎉 已学习完毕"
+                  : contentMode === "video"
+                    ? "继续观看视频，进度将自动更新"
+                    : "继续向下滚动阅读，进度将自动更新"}
               </div>
               <div className="learning-panel-meta">
                 累计学习时长：{record?.totalStudySeconds ? formatStudyTime(record.totalStudySeconds) : "0小时"}　|　最近学习：{record?.lastLearningTime || "-"}
@@ -456,11 +475,61 @@ export default function CourseDetail() {
             </div>
           </div>
 
-          <div className="course-detail-content" ref={contentRef}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {course.contentMd || "暂无课程内容"}
-            </ReactMarkdown>
-          </div>
+          {/* Content mode switcher — show only when both video and markdown exist */}
+          {course.videoUrl && course.contentMd && (
+            <div className="content-mode-switcher">
+              <Segmented
+                options={[
+                  { label: <span><PlayCircleOutlined /> 视频学习</span>, value: "video" },
+                  { label: <span><ReadOutlined /> 文档阅读</span>, value: "document" },
+                ]}
+                value={contentMode}
+                onChange={(val) => setContentMode(val as string)}
+              />
+            </div>
+          )}
+
+          {/* Video Player */}
+          {contentMode === "video" && course.videoUrl && (
+            <div className="course-video-container">
+              <video
+                ref={videoRef}
+                src={course.videoUrl}
+                controls
+                className="course-video-player"
+                onTimeUpdate={() => {
+                  const video = videoRef.current;
+                  if (video && video.duration) {
+                    const percent = Math.round((video.currentTime / video.duration) * 100);
+                    if (percent > maxScrollPercentRef.current) {
+                      maxScrollPercentRef.current = percent;
+                      setProgressPercent(percent);
+                    }
+                  }
+                }}
+                onEnded={() => {
+                  maxScrollPercentRef.current = 100;
+                  setProgressPercent(100);
+                }}
+              >
+                您的浏览器不支持视频播放
+              </video>
+              {course.videoDuration && (
+                <div className="course-video-duration">
+                  视频时长：{Math.floor(course.videoDuration / 60)}分{course.videoDuration % 60}秒
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Markdown Content */}
+          {(contentMode === "document" || !course.videoUrl) && (
+            <div className="course-detail-content" ref={contentRef}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {course.contentMd || "暂无课程内容"}
+              </ReactMarkdown>
+            </div>
+          )}
         </Card>
       </div>
 
